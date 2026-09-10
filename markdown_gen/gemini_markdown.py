@@ -1,302 +1,91 @@
-import asyncio
-import os
+"""Sequential native PDF conversion with Gemini 3.8 Flash through OpenRouter."""
+
+import argparse
+import base64
+import hashlib
 import time
-import json
-import traceback
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
 
-# Third-party imports
-from dotenv import load_dotenv
-from tqdm.asyncio import tqdm
-from google import genai
-from google.genai import types
+import httpx
 
-# -----------------------------------------------------------------------------
-# Configuration
-# -----------------------------------------------------------------------------
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+try:
+    from .remote_common import (ROOT, configure, finish_run, input_files, prepare_output,
+                                require_key, save_markdown, write_record)
+except ImportError:
+    from remote_common import (ROOT, configure, finish_run, input_files, prepare_output,
+                               require_key, save_markdown, write_record)
 
-# Configuration matching Script B's concurrency style
-MAX_CONCURRENCY = 5
-MAX_RETRIES = 3  # Number of retry attempts
-RETRY_DELAY = 2  # Seconds to wait between retries
-INPUT_DIR = Path("PDFs")
-BASE_OUTPUT_DIR = Path("gemini_results")
-MARKDOWNS_DIR = BASE_OUTPUT_DIR / "markdowns"
-JSONL_OUTPUT = BASE_OUTPUT_DIR / "results.jsonl"
+MODEL_ID = "google/gemini-3.8-flash"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-with open("ai_prompt.md", "r") as f:
-    MASTER_PROMPT = f.read()
 
-# Model Selection
-MODEL_ID = "gemini-3-pro-preview"
-
-PRICING_REGISTRY = {
-    "gemini-1.5-flash": {
-        "input_low": 0.075,   "input_high": 0.15,
-        "output_low": 0.30,   "output_high": 0.60,
-        "tier_cutoff": 128_000
-    },
-    "gemini-1.5-pro": {
-        "input_low": 1.25,    "input_high": 2.50,
-        "output_low": 5.00,   "output_high": 10.00,
-        "tier_cutoff": 128_000
-    },
-    "gemini-2.0-flash": {
-        "input_low": 0.10,    "input_high": 0.10,
-        "output_low": 0.40,   "output_high": 0.40,
-        "tier_cutoff": float('inf')
-    },
-    "gemini-3-pro-preview": {
-        "input_low": 2.00,    "input_high": 4.00,
-        "output_low": 12.00,  "output_high": 18.00,
-        "tier_cutoff": 200_000
-    }
-}
-
-# -----------------------------------------------------------------------------
-# Helpers: Cost & Sync Logic
-# -----------------------------------------------------------------------------
-
-def calculate_cost(model_id: str, input_tok: int, output_tok: int) -> float:
-    """Calculates cost based on Script A's pricing registry."""
-    base_model = next((k for k in PRICING_REGISTRY if k in model_id), None)
-    if not base_model:
-        return 0.0
-
-    pricing = PRICING_REGISTRY[base_model]
-    total_context = input_tok + output_tok
-    
-    if total_context <= pricing["tier_cutoff"]:
-        rate_in, rate_out = pricing["input_low"], pricing["output_low"]
-    else:
-        rate_in, rate_out = pricing["input_high"], pricing["output_high"]
-        
-    cost = (input_tok / 1_000_000 * rate_in) + (output_tok / 1_000_000 * rate_out)
-    return round(cost, 6)
-
-def _sync_gemini_transaction(client: genai.Client, pdf_path: Path, model: str) -> Dict[str, Any]:
-    """
-    Executes the blocking Google GenAI transaction (Upload -> Poll -> Generate -> Delete).
-    This logic is taken directly from Script A but returns a dict instead of logging.
-    """
-    filename = pdf_path.name
-    start_time = time.time()
-    uploaded_file = None
-    
-    result_data = {
-        "status": "FAILURE",
-        "markdown": None,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "cost": 0.0,
-        "duration_seconds": 0,
-        "error_msg": None
+def request_body(path: Path, prompt: str, model: str) -> dict:
+    data = base64.b64encode(path.read_bytes()).decode("ascii")
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "file", "file": {"filename": path.name,
+                "file_data": f"data:application/pdf;base64,{data}"}},
+        ]}],
+        "plugins": [{"id": "file-parser", "pdf": {"engine": "native"}}],
+        "provider": {"require_parameters": True},
+        "stream": False,
     }
 
+
+def convert_document(client, path, prompt, model):
+    response = client.post(API_URL, json=request_body(path, prompt, model))
+    response.raise_for_status()
+    data = response.json()
+    if data.get("error"):
+        raise RuntimeError(str(data["error"]))
+    choice = data["choices"][0]
+    if choice.get("finish_reason") != "stop":
+        raise ValueError(f"Incomplete generation: {choice.get('finish_reason')}")
+    return choice["message"]["content"], {
+        "generation_id": data.get("id"), "model": data.get("model"),
+        "provider": data.get("provider"), "usage": data.get("usage"),
+    }
+
+
+def run_sequential(files, args, client, prompt):
+    """Finish one document before sending the next; intentionally no task pool."""
+    started = time.perf_counter()
+    config = {"model": args.model, "gateway": "openrouter", "pdf_engine": "native",
+              "concurrency": 1, "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()}
+    records = []
+    for path in files:
+        document_start = time.perf_counter()
+        record = {"file": str(path), "success": False, "config": config}
+        try:
+            markdown, metadata = convert_document(client, path, prompt, args.model)
+            record.update(metadata)
+            record["markdown_file"] = save_markdown(args.output_dir, path, markdown)
+            record["success"] = True
+        except Exception as exc:
+            record["error"] = f"{type(exc).__name__}: {exc}"
+        record["duration_seconds"] = time.perf_counter() - document_start
+        write_record(args.output_dir, record)
+        records.append(record)
+    return finish_run(args.output_dir, records, time.perf_counter() - started, config)
+
+
+def main():
+    parser = configure(argparse.ArgumentParser(description=__doc__), "gemini_results", concurrent=False)
+    parser.add_argument("--model", default=MODEL_ID, help="OpenRouter model ID with native PDF support")
+    parser.add_argument("--prompt", type=Path, default=Path(__file__).with_name("ai_prompt.md"))
+    args = parser.parse_args()
     try:
-        # 1. Upload
-        uploaded_file = client.files.upload(
-            file=pdf_path,
-            config=types.UploadFileConfig(display_name=filename)
-        )
+        key = require_key("OPENROUTER_API_KEY")
+        files = input_files(args)
+        prompt = args.prompt.read_text(encoding="utf-8")
+        prepare_output(args.output_dir, files, args.overwrite)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
+    with httpx.Client(headers={"Authorization": f"Bearer {key}"}, timeout=args.timeout) as client:
+        return run_sequential(files, args, client, prompt)
 
-        # 2. Poll
-        while uploaded_file.state == "PROCESSING":
-            time.sleep(1)
-            uploaded_file = client.files.get(name=uploaded_file.name)
-        
-        if uploaded_file.state != "ACTIVE":
-            raise RuntimeError(f"File state: {uploaded_file.state}")
-
-        # 3. Generate
-        prompt_text = MASTER_PROMPT
-        response = client.models.generate_content(
-            model=model,
-            contents=[prompt_text, uploaded_file],
-        )
-
-        # 4. Metrics
-        if response.usage_metadata:
-            in_tok = response.usage_metadata.prompt_token_count
-            out_tok = response.usage_metadata.candidates_token_count
-            result_data["input_tokens"] = in_tok
-            result_data["output_tokens"] = out_tok
-            result_data["cost"] = calculate_cost(model, in_tok, out_tok)
-
-        result_data["markdown"] = response.text if response.text else ""
-        
-        # Validation
-        finish_reason = "UNKNOWN"
-        if response.candidates:
-            finish_reason = str(response.candidates[0].finish_reason)
-            
-        if finish_reason != "FinishReason.STOP":
-            print(finish_reason)
-            raise ValueError(f"Abnormal finish: {finish_reason}")
-        if not result_data["markdown"].strip():
-            raise ValueError("Empty output from model")
-
-        result_data["status"] = "SUCCESS"
-
-    except Exception as e:
-        result_data["error_msg"] = str(e)
-        # result_data["traceback"] = traceback.format_exc() # Uncomment for deep debug
-    
-    finally:
-        # 5. Cleanup
-        if uploaded_file:
-            try:
-                client.files.delete(name=uploaded_file.name)
-            except Exception:
-                pass # Fail silently on cleanup
-        
-        result_data["duration_seconds"] = round(time.time() - start_time, 2)
-
-    return result_data
-
-# -----------------------------------------------------------------------------
-# Async Pipeline with Retry Logic
-# -----------------------------------------------------------------------------
-
-async def append_jsonl(record: dict):
-    """Append a single JSON record to the JSONL file."""
-    with JSONL_OUTPUT.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-async def parse_document(client: genai.Client, path: Path, sem: asyncio.Semaphore) -> tuple[Path, bool]:
-    """
-    Wraps the sync Gemini transaction in a thread with retry logic.
-    """
-    async with sem:
-        timestamp = datetime.now(timezone.utc)
-        result = None
-        all_errors = []
-        
-        # Retry loop
-        for attempt in range(1, MAX_RETRIES + 1):
-            # Run blocking GenAI logic in a thread
-            result = await asyncio.to_thread(_sync_gemini_transaction, client, path, MODEL_ID)
-            
-            if result["status"] == "SUCCESS":
-                break  # Success, exit retry loop
-            
-            # Failed attempt
-            all_errors.append(f"Attempt {attempt}: {result['error_msg']}")
-            
-            if attempt < MAX_RETRIES:
-                # Wait before retrying
-                await asyncio.sleep(RETRY_DELAY * attempt)  # Exponential backoff
-            else:
-                # Final attempt failed
-                result["error_msg"] = " | ".join(all_errors)
-
-        if result["status"] == "SUCCESS":
-            # ---------- SAVE MARKDOWN FILE ----------
-            md_filename = f"{path.stem}.md"
-            md_path = MARKDOWNS_DIR / md_filename
-            
-            md_path.write_text(result["markdown"], encoding="utf-8")
-
-            # ---------- JSONL RECORD ----------
-            record = {
-                "timestamp": timestamp.isoformat(),
-                "file": str(path),
-                "model": MODEL_ID,
-                "status": "SUCCESS",
-                "duration_seconds": result["duration_seconds"],
-                "input_tokens": result["input_tokens"],
-                "output_tokens": result["output_tokens"],
-                "estimated_cost_usd": result["cost"],
-                "markdown_file": str(md_path),
-                "attempts": attempt
-            }
-            
-            await append_jsonl(record)
-            return path, True
-
-        else:
-            # ---------- FAILURE RECORD ----------
-            record = {
-                "timestamp": timestamp.isoformat(),
-                "file": str(path),
-                "model": MODEL_ID,
-                "status": "FAILURE",
-                "error": result["error_msg"],
-                "duration_seconds": result["duration_seconds"],
-                "attempts": MAX_RETRIES
-            }
-            await append_jsonl(record)
-            return path, False
-
-async def main():
-    # 0. Check API Key
-    if not GOOGLE_API_KEY:
-        print("❌ Error: GOOGLE_API_KEY not found in environment variables.")
-        return
-
-    # 1. Create directories
-    BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    MARKDOWNS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # 2. Check Inputs
-    if not INPUT_DIR.exists():
-        print(f"❌ Error: Input directory '{INPUT_DIR}' not found.")
-        return
-        
-    # Get all PDFs
-    files_to_parse = list(INPUT_DIR.glob("*.pdf"))
-    all_pdfs = list(INPUT_DIR.glob("*.pdf"))
-    files_to_parse = [f for f in all_pdfs if not (MARKDOWNS_DIR / f.with_suffix('.md').name).exists()]
-
-    # Only process PDFs that are missing their .md output
-
-    
-    # FIXED: Remove or replace the buggy filter line
-    # If you want to filter specific files, uncomment and modify:
-    # SPECIFIC_FILES = ["file1.pdf", "file2.pdf"]
-    # files_to_parse = [f for f in files_to_parse if f.name in SPECIFIC_FILES]
-    
-    if not files_to_parse:
-        print(f"❌ No PDFs found in '{INPUT_DIR}'.")
-        return
-
-    print(f"🔄 Will retry failed documents up to {MAX_RETRIES} times\n")
-
-    # 3. Initialize Client & Semaphore
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    sem = asyncio.Semaphore(MAX_CONCURRENCY)
-
-    # 4. Run and gather results
-    results = await tqdm.gather(
-        *[parse_document(client, path, sem) for path in files_to_parse],
-        desc=f"Processing PDFs with {MODEL_ID}"
-    )
-
-    # 5. Analyze failures
-    failed_files = [path.name for path, success in results if not success]
-    
-    # 6. Print Summary
-    print("\n" + "="*40)
-    print(f"PROCESSING COMPLETE")
-    print("="*40)
-    print(f"Total Files: {len(files_to_parse)}")
-    print(f"Successful:  {len(files_to_parse) - len(failed_files)}")
-    print(f"Failed:      {len(failed_files)}")
-    
-    if failed_files:
-        print("\nFiles that failed (after all retries):")
-        print("-" * 40)
-        for fname in failed_files:
-            print(f"❌ {fname}")
-    else:
-        print("\n✅ All files processed successfully.")
-    print("="*40 + "\n")
-    print(f"Results log: {JSONL_OUTPUT}")
-    print(f"Markdowns:   {MARKDOWNS_DIR}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(main())

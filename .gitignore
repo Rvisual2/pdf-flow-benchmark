@@ -9,5 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .env
+runs/
 models_cache/
 .DS_Store

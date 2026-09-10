@@ -391,6 +391,8 @@ def analyze_results(
     min_score_threshold: float,
     excluded_folders: list[str],
     logger: logging.Logger,
+    granular_output: str = "benchmark_granular.csv",
+    filtered_output: str = "benchmark_data/benchmark_filtered.csv",
 ) -> pd.DataFrame:
     """
     Analyze raw scores to produce a final summary report.
@@ -422,10 +424,10 @@ def analyze_results(
 
     # Exclude specified folders (e.g., 'test' folders)
     filtered_df = filtered_df[~filtered_df["Folder"].isin(excluded_folders)]
-    filtered_df.to_csv("benchmark_granular.csv", index=False)
+    filtered_df.to_csv(granular_output, index=False)
     # Keep only rows where at least one method found a close match
     filtered_df = filtered_df[filtered_df[score_columns].min(axis=1) < min_score_threshold]
-    filtered_df.to_csv("benchmark_data/benchmark_filtered.csv", index=False)
+    filtered_df.to_csv(filtered_output, index=False)
 
     if filtered_df.empty:
         logger.warning("No data left after filtering. Cannot generate report.")
@@ -496,6 +498,10 @@ def main() -> int:
                         help='Output path for cleaned data')
     parser.add_argument('--benchmark-output', type=str, default='benchmark_results_final.csv',
                         help='Output path for benchmark results')
+    parser.add_argument('--granular-output', default='benchmark_granular.csv')
+    parser.add_argument('--filtered-output', default='benchmark_data/benchmark_filtered.csv')
+    parser.add_argument('--markdown-source', action='append', metavar='NAME=DIRECTORY',
+                        help='Evaluate these Markdown directories instead of the default providers; repeat per tool')
     
     # Benchmark configuration
     parser.add_argument('--min-score-threshold', type=float, default=0.25,
@@ -522,10 +528,19 @@ def main() -> int:
         ('datalab_results/markdowns', 'datalab'),
         ('gemini_results/markdowns', 'gemini'),
         ('llama_parse_results/markdowns', 'llama_parse'),
-        ('pymupdflayout_results/markdowns', 'pymupdflayout'),
+        ('pymupdflayout_results/markdowns', 'pymupdf4llm'),
         ('docling_wocr_results/markdowns', 'docling_cpu_without_ocr'),
         ('docling_ocr_results/markdowns', 'docling_cpu_with_ocr'),
     ]
+    if args.markdown_source:
+        folder_info = []
+        for source in args.markdown_source:
+            name, separator, directory = source.partition('=')
+            if not separator or not name.strip() or not os.path.isdir(directory):
+                parser.error('--markdown-source requires NAME=existing-directory')
+            if name in {column for _, column in folder_info} or name in {'page_number', 'needle_index', 'needle', 'OCR', 'Page', 'Folder', 'Folder_Count'}:
+                parser.error(f'Duplicate or reserved source name: {name}')
+            folder_info.append((directory, name))
     score_columns = [col_name for _, col_name in folder_info]
     
     try:
@@ -574,7 +589,9 @@ def main() -> int:
             score_columns,
             args.min_score_threshold,
             args.excluded_folders,
-            logger
+            logger,
+            args.granular_output,
+            args.filtered_output,
         )
         
         if not final_results.empty:

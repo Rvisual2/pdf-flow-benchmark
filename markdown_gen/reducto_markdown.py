@@ -1,160 +1,73 @@
+"""Reducto V3 r-1 parsing with concurrent, immediate-processing async jobs."""
+
+import argparse
 import asyncio
-from pathlib import Path
-import json
-from datetime import datetime, timezone
-from reducto import (
-    AsyncReducto,
-    APIConnectionError,
-    RateLimitError,
-    APIStatusError,
-    __version__ as reducto_version
-)
-from dotenv import load_dotenv
-from tqdm.asyncio import tqdm
-import os
+from importlib.metadata import version
 
-load_dotenv()
-reducto_api_key = os.getenv("REDUCTO_API_KEY")
+import httpx
+from reducto import AsyncReducto
 
-client = AsyncReducto(api_key=reducto_api_key)
-
-MAX_CONCURRENCY = 30
-INPUT_DIR = Path("PDFs")
-FILES_TO_PARSE = list(INPUT_DIR.glob("*.pdf"))
-
-# --- Configuration for Output folders ---
-BASE_OUTPUT_DIR = Path("reducto_results")
-MARKDOWNS_DIR = BASE_OUTPUT_DIR / "markdowns"
-JSONL_OUTPUT = BASE_OUTPUT_DIR / "results.jsonl"
+try:
+    from .remote_common import configure, input_files, prepare_output, require_key, run_documents, save_submission
+except ImportError:
+    from remote_common import configure, input_files, prepare_output, require_key, run_documents, save_submission
 
 
-async def append_jsonl(record: dict):
-    """Append a single JSON record to the JSONL file."""
-    with JSONL_OUTPUT.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+async def result_markdown(result, download_client):
+    payload = result.result.model_dump(mode="json")
+    if payload["type"] == "url":
+        response = await download_client.get(payload["url"])
+        response.raise_for_status()
+        payload = response.json()
+    # Reducto wraps whole-document Markdown in one item even with chunking disabled.
+    chunks = payload if isinstance(payload, list) else payload["chunks"]
+    if len(chunks) != 1:
+        raise ValueError("Expected one full-document Markdown result with chunking disabled")
+    return chunks[0]["content"]
 
 
-async def parse_document(path: Path, sem: asyncio.Semaphore) -> tuple[Path, bool]:
-    """
-    Parses a document and returns a tuple: (Path, Success_Boolean).
-    Returns True if successful (200 OK), False otherwise.
-    """
-    async with sem:
-        timestamp = datetime.now(timezone.utc)
-
-        try:
-            upload = await client.upload(file=path)
-            result = await client.parse.run(
-                input=upload,
-                formatting={"table_output_format": "md"}
-            )
-
-            # ---------- FULL MARKDOWN ----------
-            full_markdown = "\n\n".join(
-                chunk.content for chunk in result.result.chunks
-            )
-
-            # ---------- SAVE MARKDOWN FILE ----------
-            md_filename = f"{path.stem}.md"
-            md_path = MARKDOWNS_DIR / md_filename
-            md_path.write_text(full_markdown, encoding="utf-8")
-
-            # ---------- JSONL RECORD ----------
-            record = {
-                "timestamp": timestamp.isoformat(),
-                "reducto_version": reducto_version,
-                "file": str(path),
-                "job_id": result.job_id,
-                "duration": result.duration,
-                "credits_used": result.usage.credits,
-                "pages_processed": result.usage.num_pages,
-                "studio_link": result.studio_link,
-                "markdown_file": str(md_path),
-                "full_result": result.model_dump(),
+async def convert_document(client, download_client, path, args):
+    uploaded = await client.upload(file=path)
+    job = await client.parse.run_job(
+        input=uploaded.file_id, settings={"model": "r-1"},
+        retrieval={"chunking": {"chunk_mode": "disabled"}},
+        formatting={"table_output_format": "md"}, queue_priority="standard")
+    save_submission(args.output_dir, {"file": str(path), "job_id": job.job_id,
+                                     "queue": "standard", "model": "r-1"})
+    while True:
+        status = await client.job.get(job.job_id)
+        if status.status == "Completed":
+            if status.result is None:
+                raise RuntimeError("Completed job has no result")
+            result = status.result
+            return await result_markdown(result, download_client), {
+                "job_id": job.job_id, "server_duration": result.duration,
+                "usage": result.usage.model_dump(mode="json"),
             }
-
-            await append_jsonl(record)
-            return path, True # Success
-
-        except APIConnectionError as e:
-            await append_jsonl({
-                "timestamp": timestamp.isoformat(),
-                "reducto_version": reducto_version,
-                "file": str(path),
-                "error": "connection_error",
-                "details": str(e),
-            })
-            return path, False # Failure
-
-        except RateLimitError:
-            await append_jsonl({
-                "timestamp": timestamp.isoformat(),
-                "reducto_version": reducto_version,
-                "file": str(path),
-                "error": "rate_limit",
-            })
-            return path, False # Failure
-
-        except APIStatusError as e:
-            await append_jsonl({
-                "timestamp": timestamp.isoformat(),
-                "reducto_version": reducto_version,
-                "file": str(path),
-                "error": "api_status",
-                "status_code": e.status_code,
-                "response": str(e.response),
-            })
-            return path, False # Failure
-
-        except Exception as e:
-            # Catch-all for other unexpected errors (file read, etc.)
-            await append_jsonl({
-                "timestamp": timestamp.isoformat(),
-                "reducto_version": reducto_version,
-                "file": str(path),
-                "error": "unexpected_error",
-                "details": str(e),
-            })
-            return path, False # Failure
+        if status.status == "Failed":
+            raise RuntimeError(f"Reducto job {job.job_id} failed: {status.reason or status.error}")
+        await asyncio.sleep(2)
 
 
-async def main():
-    # 1. Create directories
-    BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    MARKDOWNS_DIR.mkdir(parents=True, exist_ok=True)
+async def run(args, key, files):
+    config = {"model": "r-1", "api": "v3", "sdk_version": version("reductoai"),
+              "queue": "standard", "chunk_mode": "disabled",
+              "table_output_format": "md", "concurrency": args.concurrency}
+    async with AsyncReducto(api_key=key, timeout=120) as client, httpx.AsyncClient(timeout=120) as download:
+        return await run_documents(files, args, lambda path: convert_document(client, download, path, args), config)
 
-    # 2. Clear or create the JSONL file
-    JSONL_OUTPUT.write_text("")
 
-    sem = asyncio.Semaphore(MAX_CONCURRENCY)
-
-    # 3. Run and gather results
-    results = await tqdm.gather(
-        *[parse_document(path, sem) for path in FILES_TO_PARSE],
-        desc="Parsing PDFs"
-    )
-
-    # 4. Analyze failures
-    # results is a list of tuples: [(path, is_success), ...]
-    failed_files = [path.name for path, success in results if not success]
-    
-    # 5. Print Summary
-    print("\n" + "="*40)
-    print(f"PROCESSING COMPLETE")
-    print("="*40)
-    print(f"Total Files: {len(FILES_TO_PARSE)}")
-    print(f"Successful:  {len(FILES_TO_PARSE) - len(failed_files)}")
-    print(f"Failed:      {len(failed_files)}")
-    
-    if failed_files:
-        print("\nFiles that failed (did not get 200 OK):")
-        print("-" * 40)
-        for fname in failed_files:
-            print(f"❌ {fname}")
-    else:
-        print("\n✅ All files processed successfully.")
-    print("="*40 + "\n")
+def main():
+    parser = configure(argparse.ArgumentParser(description=__doc__), "reducto_results")
+    args = parser.parse_args()
+    try:
+        key = require_key("REDUCTO_API_KEY")
+        files = input_files(args)
+        prepare_output(args.output_dir, files, args.overwrite)
+        return asyncio.run(run(args, key, files))
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(main())
