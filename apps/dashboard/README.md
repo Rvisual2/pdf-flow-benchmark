@@ -124,7 +124,10 @@ and creates previews for other branches. Its **Ignored Build Step** compares
 `apps/dashboard/` with the last deployed commit on that branch. Changes elsewhere
 in the repository skip the build. A first deployment always builds; comparing
 against the last deployment also catches dashboard edits earlier in a multi-commit
-push. No GitHub Actions workflow or Vercel token in GitHub secrets is needed.
+push. Vercel records skipped pushes as canceled deployments; dependency
+installation and the build command do not run, and the existing production
+deployment stays live. No GitHub Actions workflow or Vercel token in GitHub
+secrets is needed.
 
 Changes to `public/data-source.json` count as dashboard changes, so publishing a
 new evaluation and pushing its updated pointer refreshes the deployed results.
