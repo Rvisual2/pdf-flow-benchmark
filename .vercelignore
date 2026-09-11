@@ -6,6 +6,8 @@
 **/.env*
 AGENTS.md
 agents.md
+build/
+dist/
 data/
 results/
 src/
