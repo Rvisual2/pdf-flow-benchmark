@@ -1,0 +1,27 @@
+# CLI deployments only need the dashboard. Git builds use the project root setting.
+.git/
+.vercel/
+.venv/
+.env*
+**/.env*
+AGENTS.md
+agents.md
+data/
+results/
+src/
+tests/
+docs/
+models_cache/
+.ruff_cache/
+**/__pycache__/
+**/node_modules/
+**/dist/
+**/.sites-runtime/
+**/.openai/
+**/public/pdfjs/
+**/*.tsbuildinfo
+*.pem
+*.key
+credentials.json
+application_default_credentials.json
+service-account*.json

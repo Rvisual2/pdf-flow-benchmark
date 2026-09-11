@@ -3,6 +3,8 @@
 A React + TypeScript workspace for comparing PDF-to-Markdown parsers. Vite builds a
 static site; no API server, account, or provider credentials are needed to browse it.
 
+[Open the live dashboard](https://pdf-flow-benchmark.vercel.app).
+
 ## Run locally
 
 Use Node.js 22.12+ (or 24+) and npm:
