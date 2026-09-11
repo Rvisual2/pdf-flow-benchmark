@@ -1,0 +1,28 @@
+{
+  "bucket": "pdf-flow-benchmark-hashiromer-20260910",
+  "dataset": {
+    "sha256": "d381e079bd6705714cdc558e87675ffb90939e43c6f3b071d8231a7551cc4252",
+    "size": 87613,
+    "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/d381e079bd6705714cdc558e87675ffb90939e43c6f3b071d8231a7551cc4252/manifest.json"
+  },
+  "project": "pypi-download-analysis-457820",
+  "releases": {
+    "all-tools-2026-09-10": {
+      "sha256": "ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8",
+      "size": 1112774,
+      "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8/manifest.json"
+    },
+    "baseline": {
+      "sha256": "8562c8431653f61c09c1ac1fb50e5efa8cd83455a96a86f85a64151acddb4260",
+      "size": 916128,
+      "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/8562c8431653f61c09c1ac1fb50e5efa8cd83455a96a86f85a64151acddb4260/manifest.json"
+    }
+  },
+  "schema_version": 1,
+  "thumbnail_bucket": "pdf-flow-thumbnails-hashiromer-20260910",
+  "thumbnails": {
+    "sha256": "b180f4c190c44dbe9c30e33ed0a9862b603eeda76530310234888ee6947e2ecb",
+    "size": 68933,
+    "url": "https://storage.googleapis.com/pdf-flow-thumbnails-hashiromer-20260910/objects/b180f4c190c44dbe9c30e33ed0a9862b603eeda76530310234888ee6947e2ecb/thumbnails.json"
+  }
+}

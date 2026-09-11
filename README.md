@@ -1,151 +1,234 @@
 # Flow-Aware PDF-to-Markdown Benchmark
 
-This repository provides a benchmark for evaluating the accuracy of PDF-to-Markdown extraction tools. The main goal is to measure how well a tool can convert a complex, 2D PDF document into a 1D (text/markdown) format that **preserves the logical reading flow** of the content.
+Compare PDF extraction tools by how well their Markdown preserves coherent reading
+flow. Flow-Aware Text Accuracy (FATA) matches reference snippets against each
+parser's output and reports character-level similarity as a percentage.
 
----
+## Setup
 
-## The Core Problem
-
-Large Language Models (LLMs) operate on a 1D sequence of tokens. They cannot natively understand the 2D spatial layout of a PDF. This "2D-to-1D" gap is a major bottleneck.
-
-Existing benchmarks are often inadequate:
-1.  **They focus on layout detection:** Datasets like DocLayNet are excellent for identifying *bounding boxes* (e.g., "this is a paragraph"), but not for connecting text blocks that form a single, logical flow (e.g., "this paragraph continues in the next column").
-2.  **They assume a "total order":** Some benchmarks incorrectly assume a single, linear reading path for an entire document. In reality, complex documents have a **partial order**. For example, a main article and a sidebar can be read independently; neither logically precedes the other.
-
-This benchmark is designed to measure a tool's ability to extract and correctly sequence these logically coherent "threads" of text.
-
----
-
-## Benchmark Methodology
-
-### 1. Dataset
-The benchmark uses **127 PDF documents** sampled from the [DocLayNet dataset](https://github.com/DS4SD/DocLayNet), ensuring a diverse mix of challenging, real-world layouts. The documents are sourced from six distinct categories:
-* Financial Reports
-* Scientific Articles
-* Laws & Regulations
-* Government Tenders
-* Manuals
-* Patents
-
-### 2. Ground Truth
-To create a "ground truth" for evaluating text flow, for each document, we **manually copied multiple, random pieces of text in their correct logical reading order** to create "ground truth snippets" for each PDF. An evaluation metric can then check if a tool's output contains these snippets, in order, without being jumbled with text from other columns or sections. This method effectively tests the preservation of reading flow.
-
-### 3. Evaluation Metric: FATA Score
-We evaluate tools using a **Flow-Aware Text Accuracy (FATA) Score**. 
-
-1.  For each ground truth text snippet (`truth_i`), we search the tool's entire markdown output to find the substring that is its "best match" (`best_match_i`).
-2.  This "best match" is determined using the **Normalized Levenshtein distance** (a measure of character-level similarity).
-3.  The final FATA score is a weighted average of the similarity scores for all snippets.
-4.  A high FATA score (max 1.0) indicates the tool successfully extracted the text snippets with their internal order intact. A low score indicates the text was "mangled" (e.g., columns interleaved, text garbled), making it impossible to find a clean match for the ground truth snippets. These are converted to percentages, 100% being perfect.
-
----
-
-## Initial Tools Evaluated
-
-This benchmark was used to generate a comparative analysis of modern PDF extraction tools that produce markdown directly. The initial set of tools evaluated includes:
-
-* LlamaParse
-* Docling
-* PyMuPDF4LLM
-* Marker
-* Reducto
-* Google Gemini (multimodal)
----
-
-
-# How to run this benchmark
+Use Python 3.13 or newer. From the repository root:
 
 ```bash
-uv sync
-uv run prod_benchmark.py
+uv sync --frozen
+uv run pdf-benchmark --help
+uv run pdf-benchmark data download
 ```
 
-## Updated converter runners
+`uv sync` installs the project in editable mode and exposes `pdf-benchmark`.
+Build a distributable wheel with `uv build`; the wheel contains code and the LLM
+prompt, while datasets and results remain in the checkout. Local converters
+download models on first use. The
+[converter audit](docs/converter-upgrade.md) records reviewed SDK versions and
+provider API details; `uv.lock` fixes the dependency set. Commands locate this
+checkout in editable installs. When using a wheel elsewhere, set
+`PDF_BENCHMARK_ROOT` to the checkout or provide explicit input and output paths.
+The [layout migration guide](docs/repository-layout.md) maps all former paths.
 
-See the [2026-09-10 upgrade audit](docs/converter-upgrade.md) for versions,
-API migrations, batch options, and official sources. Install the reviewed
-versions with `uv sync --frozen`. Run `--help` on any generator for its options.
-
-Local examples (new output folders preserve the committed baseline):
+## Explore the CLI
 
 ```bash
-uv run markdown_gen/pymupdf4llm_markdown.py --output-dir runs/pymupdf4llm
-uv run markdown_gen/docling_cpu.py --ocr both --workers 2 --batch-size 8 --output-dir runs/docling
+uv run pdf-benchmark                       # Show command groups and examples
+uv run pdf-benchmark parsers list          # Available tools and credential presence
+uv run pdf-benchmark parsers show reducto  # Defaults and every provider option
+uv run pdf-benchmark data show             # Dataset size and categories
+uv run pdf-benchmark results releases       # Published cloud releases
+uv run pdf-benchmark results download       # Restore baseline Markdown
+uv run pdf-benchmark data page 12          # Inspect reference snippets
+uv run pdf-benchmark results list          # Browse recent runs and evaluations
+uv run pdf-benchmark results show results/runs/reducto
+uv run pdf-benchmark results scores results/runs/evaluation
 ```
 
-Docling CPU's default paths remain `docling_ocr_results/` and
-`docling_wocr_results/`. With `--ocr both --output-dir runs/docling`, outputs
-instead go to `runs/docling/ocr/` and `runs/docling/no_ocr/`. Models download on
-first use. PyMuPDF remains an internal dependency for extracting annotated
-ground truth. PyMuPDF4LLM is a separate benchmark provider; the Docling GPU
-runner is removed. PyMuPDF4LLM uses the current bundled Layout default, with
-`--no-layout` available to disable it and `--no-ocr` to disable automatic OCR.
-Automatic OCR is available in Layout mode. The runner uses native
-`convert_batch()` with automatic worker sizing, streaming results, and persistent
-workers. Override with `--workers 4` or `--no-persistent`. Native per-document
-logs and outputs are retained under `native/`; flat Markdown for scoring is under
-`markdowns/`. `--no-layout` uses native sequential execution because the library
-does not propagate that setting to spawned worker processes.
-Its default output directory remains `pymupdflayout_results/` for compatibility
-with the committed dataset; its benchmark column is named `pymupdf4llm`.
+Every group supports `--help`; inspection commands accept `--json` for scripts.
+Discovery makes no paid requests. See [CLI usage](docs/cli.md) for workflows.
 
-Store the relevant API key in your environment or an ignored root `.env`:
-`OPENROUTER_API_KEY`, `LLAMA_CLOUD_API_KEY`, `REDUCTO_API_KEY`, or
-`DATALAB_API_KEY`. These commands invoke paid services:
+## Browse the dashboard
+
+The [React dashboard](apps/dashboard/README.md) compares all seven parser pipelines
+across 129 PDFs. Filter the document score matrix by tool, category, low/high scores,
+or tool disagreements. Open a score to compare ground-truth snippets with the
+evaluator's closest matches. The PDF + Markdown tab shows the original PDF beside
+rendered or raw tool output, and the tool comparison view diffs complete outputs.
+Document previews, reference matches, and artifact provenance connect scores to evidence.
 
 ```bash
-uv run markdown_gen/gemini_markdown.py --output-dir runs/gemini
-uv run markdown_gen/llamaprse_markdown.py --concurrency 5 --output-dir runs/llama
-uv run markdown_gen/reducto_markdown.py --concurrency 5 --output-dir runs/reducto
-uv run markdown_gen/datalab_markdown.py --concurrency 5 --output-dir runs/datalab
+cd apps/dashboard
+npm ci
+npm run dev
 ```
 
-Gemini uses `google/gemini-3.8-flash` through OpenRouter, **one document at a
-time**, with native PDF input. The same sequential runner supports other
-native-PDF LLMs through `--model`. No Google Gemini API key is needed.
-LlamaParse defaults to `agentic`; Datalab defaults to `accurate`; Reducto
-uses `r-1`. LlamaParse supports `--server-batch` on Pro/Enterprise plans.
-Reducto uses concurrent standard async jobs for immediate processing and saves
-each result as it completes. Delayed discount queues are excluded.
-Chunking is explicitly disabled: each PDF produces one full-document Markdown
-string, with tables formatted as Markdown.
-Use `--fresh` on LlamaParse or Datalab to bypass cached results for timing runs.
+The dashboard reads published artifacts anonymously; no Python environment or API
+keys are needed to view it. Build a static deployment with `npm run build`.
+Refresh its data from evaluated, published runs with `pdf-benchmark dashboard export`;
+see the dashboard guide for the complete workflow.
 
-All runners support `--limit 2` for smoke checks. A run writes Markdown,
-per-document `results.jsonl`, `run.json`, and total wall time in `duration.txt`.
-Nonempty outputs require `--overwrite`; that option clears prior Markdown.
-Failed/empty results are reported and cause a nonzero exit code.
+## Generate Markdown
 
-## Evaluate custom runs
-
-Repeat `--markdown-source NAME=DIRECTORY` to select the outputs to compare.
-Each directory must contain `page_<number>.md` files. Both Docling pipelines
-can appear as separate columns:
+Every parser uses the same command structure:
 
 ```bash
-mkdir -p runs/reports
-uv run prod_benchmark.py \
-  --markdown-source docling_ocr=runs/docling/ocr/markdowns \
-  --markdown-source docling_no_ocr=runs/docling/no_ocr/markdowns \
-  --markdown-source pymupdf4llm=runs/pymupdf4llm/markdowns \
-  --annotations-output runs/reports/annotations.json \
-  --combined-output runs/reports/combined.json \
-  --cleaned-output runs/reports/cleaned.json \
-  --granular-output runs/reports/granular.csv \
-  --filtered-output runs/reports/filtered.csv \
-  --benchmark-output runs/reports/final.csv
+uv run pdf-benchmark convert llamaparse --output-dir results/runs/llamaparse
+uv run pdf-benchmark convert datalab --output-dir results/runs/datalab
+uv run pdf-benchmark convert reducto --output-dir results/runs/reducto
+uv run pdf-benchmark convert gemini --output-dir results/runs/gemini
+uv run pdf-benchmark convert pymupdf4llm --workers 2 --output-dir results/runs/pymupdf4llm
+uv run pdf-benchmark convert docling --ocr both --workers 2 --output-dir results/runs/docling
 ```
 
-The original scoring/filtering methodology is unchanged: rows missing a score
-from any selected provider are excluded. Use complete conversion runs for
-comparisons and inspect failures before interpreting scores.
+Download inputs first with `uv run pdf-benchmark data download`.
+The first four commands invoke paid services. Set credentials in your environment
+or an ignored root `.env` file:
 
-## Offline validation
+| Parser | Default configuration | Credential |
+| --- | --- | --- |
+| LlamaParse | v2 `agentic`, latest published date for that tier | `LLAMA_CLOUD_API_KEY` |
+| Datalab | `accurate` | `DATALAB_API_KEY` |
+| Reducto | V3 `r-1`, standard queue, chunking disabled | `REDUCTO_API_KEY` |
+| Gemini | OpenRouter `google/gemini-3.8-flash`, native PDF input | `OPENROUTER_API_KEY` |
+| PyMuPDF4LLM | Native `convert_batch()`, bundled Layout and OCR | None |
+| Docling | CPU, separate OCR and no-OCR pipelines | None |
+
+Common options include `--input-dir data/pdfs`, `--limit 2` for a smoke check, and
+`--overwrite` to replace an existing run. Use `<parser> --help` for all options.
+
+LlamaParse, Datalab, and Reducto accept `--concurrency` (default 5). Gemini's
+current runner processes one document at a time; execution policy is separate
+from parsing. LlamaParse optionally supports `--server-batch` and an explicit
+`--parser-version`; LlamaParse and Datalab support `--fresh` for timing runs.
+Reducto uses immediate standard async jobs and saves whole-document Markdown,
+including Markdown tables. Delayed discount queues are not used.
+
+PyMuPDF4LLM supports `--no-layout`, `--no-ocr`, and `--no-persistent`.
+Without Layout it uses one worker because the native worker pool does not
+propagate that setting. Docling accepts `--ocr on`, `off`, or `both`, plus
+`--batch-size`, `--page-batch-size`, and `--threads`.
+
+A run contains `markdowns/page_<number>.md`, `results.jsonl`, `run.json`, and
+`duration.txt`. PyMuPDF4LLM also retains native outputs under `native/`.
+Docling's `--ocr both --output-dir results/runs/docling` creates `ocr/` and `no_ocr/`.
+Nonempty destinations require `--overwrite`, which clears old Markdown and run
+summaries. Remote submission IDs remain in `submissions.jsonl`. Failed or empty
+conversions produce a nonzero exit code; successful documents are preserved.
+
+The old standalone runners have been removed. Use `pdf-benchmark convert <parser>`
+for every provider; `python -m pdf_benchmark` is also available after installation.
+New conversions default to `results/runs/<parser>/`, leaving archived baselines
+under `results/baseline/` intact.
+
+## Evaluate results
+
+Restore the archived baseline with `uv run pdf-benchmark results download`, or
+select complete runs with repeated `--markdown-source NAME=DIRECTORY` arguments:
+
+```bash
+uv run pdf-benchmark evaluate \
+  --markdown-source llamaparse=results/runs/llamaparse/markdowns \
+  --markdown-source reducto=results/runs/reducto/markdowns \
+  --markdown-source docling_ocr=results/runs/docling/ocr/markdowns \
+  --markdown-source docling_no_ocr=results/runs/docling/no_ocr/markdowns \
+  --output-dir results/runs/evaluation
+```
+
+The output directory contains:
+
+- `scores.csv`: a simple `tool,score_percent` table.
+- `scores_by_category.csv`: category scores and the weighted mean.
+- `granular.csv` and `filtered.csv`: snippet distances and matched text.
+- `ground_truth.json`: versioned reference snippets with source IDs.
+- Legacy intermediate JSON exports for existing analysis scripts.
+
+By default, evaluation reads `data/ground_truth/references.json` and the downloaded
+Markdown under `results/baseline/`. To evaluate a separately reviewed reference file:
+
+```bash
+uv run pdf-benchmark evaluate \
+  --ground-truth-input results/runs/evaluation/ground_truth.json \
+  --markdown-source reducto=results/runs/reducto/markdowns \
+  --output-dir results/runs/reviewed-evaluation
+```
+
+Use `--rebuild-ground-truth` to regenerate references from annotated PDFs and
+`ocr.xlsx`. Reports default to `results/runs/evaluation/`; individual output flags
+remain available. See [ground-truth editing](docs/ground-truth.md) for the schema
+and provenance. Evaluation never overwrites the source references by default.
+
+## Publish artifacts
+
+PDFs and raw Markdown with provenance live in Google Cloud Storage. Downloads are
+anonymous; publishing uses the owner's `gcloud auth login` credentials.
+
+```bash
+uv run pdf-benchmark data upload --label dataset-v1
+uv run pdf-benchmark results upload results/runs/reducto --label reducto-v1
+uv run pdf-benchmark results download --release all-tools-2026-09-10 \
+  --directory results/runs/published-september
+```
+
+See [cloud artifacts](docs/cloud-artifacts.md) for manifests, integrity checks,
+provenance, and access permissions. Public users cannot list or write objects.
+
+## How scoring works
+
+The source collection includes documents sampled from DocLayNet across financial
+reports, scientific articles, laws, tenders, manuals, and patents. Numbered PDF
+highlights form reference snippets in reading order; the workbook supplies
+additional OCR references. Each snippet represents a coherent passage, without
+requiring unrelated passages on a page to have a single total order.
+
+The scorer uses fuzzy substring alignment, then normalized Levenshtein distance.
+A perfect match has distance 0. Category accuracy is `(1 - mean distance) * 100`;
+the overall score weights categories by their retained snippet counts.
+
+The historical filters remain unchanged: missing scores from any selected parser
+exclude that snippet, the `test` category is excluded, and at least one parser
+must achieve distance below 0.25. Consequently, changing the selected parsers can
+change the evaluation sample. Compare the same providers and inspect filtered
+rows when interpreting differences.
+
+References contain known extraction and reading-order errors. Raw HTML, Markdown
+formatting, and whitespace can also affect distances. This refactor preserves
+existing scoring behavior; it does not apply the experimental ground-truth or
+HTML normalization corrections from earlier analyses.
+
+## Code organization and extension
+
+```text
+src/pdf_benchmark/          Installable Python package
+  parsers/                 Provider adapters and their options
+  evaluation/              References, source loaders, matching, scoring
+  resources/               Bundled PDF-to-Markdown prompt
+  cli.py, registry.py       Commands and lazy parser registration
+  execution.py, models.py   Execution policies and shared result contracts
+  artifacts.py, compare.py  Run output and directory comparison
+data/
+  pdfs/                    Converter inputs
+  ground_truth/             References, annotated PDFs, OCR workbook
+  page_categories.csv      Page-to-category mapping
+results/
+  baseline/                Downloaded provider outputs and historical reports
+  runs/                    Ignored experiments and new generated output
+apps/dashboard/            React score overview and document comparison workspace
+tests/                     Essential offline integration tests
+docs/                      Parser, dataset, and migration guides
+```
+
+Adapters contain SDK clients and related configuration. Shared execution and
+artifact handling keep polling limits, error reporting, and output conventions
+out of individual providers. Plain functions handle matching and reporting.
+Follow [Adding a parser](docs/adding-parsers.md) to register a new adapter without
+changing the scorer.
+
+## Development
 
 ```bash
 uv run python -m unittest discover -s tests -v
+uv run ruff check .
+uv run ruff format --check .
+uv run pdf-benchmark compare before/ after/ differences.txt
 ```
 
-Tests exercise real SDK request serialization with mocked HTTP responses,
-sequential LLM processing, bounded parser concurrency, partial failures, and
-batch result mapping. They do not submit paid requests.
+The small offline suite checks paid request contracts, failure handling, async
+execution limits, native batch identity mapping, and evaluation from reference
+JSON. It makes no paid requests. For scoring changes, compare full-corpus reports
+against a baseline; for local adapter changes, compare real sample Markdown.
+Keep generated experiments under ignored `results/runs/`. Publish artifacts explicitly; generated Markdown and PDFs are no longer tracked.

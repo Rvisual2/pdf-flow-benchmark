@@ -9,6 +9,27 @@ wheels/
 # Virtual environments
 .venv
 .env
-runs/
+.env.*
+!.env.example
+credentials.json
+application_default_credentials.json
+service-account*.json
+*.pem
+*.key
+results/runs/
 models_cache/
 .DS_Store
+
+# Local tool caches
+.ruff_cache/
+
+# Local agent instructions
+AGENTS.md
+agents.md
+
+# Published artifacts: restore with pdf-benchmark data/results download.
+/data/pdfs/
+/data/ground_truth/annotated_pdfs/
+/data/ground_truth/ocr.xlsx
+/results/baseline/*
+!/results/baseline/evaluation/

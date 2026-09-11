@@ -1,6 +1,6 @@
 # Converter upgrade audit — 2026-09-10
 
-The last repository commit is dated 2026-04-23. SDK versions below were checked against PyPI and current official documentation. Pins record the reviewed release; a newer release should be reviewed before changing them. Provider accuracy claims have not been measured on this corpus.
+The pre-upgrade repository baseline was dated 2026-04-23. SDK versions below were checked against PyPI and current official documentation. Pins record the reviewed release; a newer release should be reviewed before changing them. Provider accuracy claims have not been measured on this corpus.
 
 | Tool | Updated integration | Bulk processing |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ The last repository commit is dated 2026-04-23. SDK versions below were checked 
 
 The legacy `llama-cloud-services` packages constrain `llama-cloud` to 0.1.x. The migration replaces `llama-cloud-services` and `llama-parse` with the current SDK. The new dependency set resolves in `uv.lock`.
 
-PyMuPDF4LLM is included as one benchmark provider, using the current bundled Layout default. `--no-layout` disables Layout explicitly and uses native sequential execution to preserve this setting across platforms: the current batch pool does not propagate it to spawned workers. The `pymupdf4llm` score column reads the existing `pymupdflayout_results/markdowns` directory by default. PyMuPDF 1.28.2 also remains an internal dependency for reading ground-truth annotations. The Docling GPU runner is removed.
+PyMuPDF4LLM is included as one benchmark provider, using the current bundled Layout default. `--no-layout` disables Layout explicitly and uses native sequential execution to preserve this setting across platforms: the current batch pool does not propagate it to spawned workers. The `pymupdf4llm` score column reads the `results/baseline/pymupdf4llm/markdowns` directory by default. PyMuPDF 1.28.2 also remains an internal dependency for reading ground-truth annotations. The Docling GPU runner is removed.
 
 LlamaParse resolves the service's `latest` version **for the selected tier** once before submission, validates it against published versions, and records the dated version. `--parser-version` can select a published date explicitly. Native directory batches create a saved configuration using those same settings; remote configuration, directory, file, and batch IDs are written to `submissions.jsonl`.
 
@@ -43,8 +43,21 @@ Runs refuse nonempty output folders unless `--overwrite` is supplied. Overwritin
 
 - Native PyMuPDF4LLM batch conversion passed two-document checks with Layout enabled and disabled. Its Markdown matched the single-document API byte for byte on the sample and passed through the scorer. A mixed valid/corrupt batch preserved the valid output, reported the corrupt file, and returned a failure exit code.
 
-- Nine offline converter tests pass, including actual SDK request serialization against mocked HTTP transports.
+- Essential offline integration tests cover API request serialization against mocked HTTP transports, failure handling, native batch mapping, and evaluation from reference JSON.
 - Both Docling CPU modes converted a two-document sample using spawned workers and the locked dependencies (CPU PyTorch wheel variant).
 - With the same six selected providers, the original and updated scoring implementations produced byte-identical granular, filtered, and final CSVs on the existing dataset.
 - The lockfile validates, and the installed validation environment passes dependency compatibility checks.
-- On 2026-09-10, authorized live conversions of `PDFs/page_1.pdf` succeeded for LlamaParse `agentic_plus` (2026-08-19), Datalab `accurate`, Reducto `r-1` (standard queue, chunking disabled), and Gemini `google/gemini-3.8-flash` through OpenRouter. Each returned nonempty Markdown containing source-document text. Artifacts are in `runs/paid-live-20260910T102327Z/`. This single-document smoke check does not establish corpus accuracy or comparative throughput.
+- On 2026-09-10, authorized live conversions of `PDFs/page_1.pdf` succeeded for LlamaParse `agentic_plus` (2026-08-19), Datalab `accurate`, Reducto `r-1` (standard queue, chunking disabled), and Gemini `google/gemini-3.8-flash` through OpenRouter. Each returned nonempty Markdown containing source-document text. Artifacts are in `results/runs/paid-live-20260910T102327Z/`. This single-document smoke check does not establish corpus accuracy or comparative throughput.
+
+## Refactored entry points
+
+The current implementation lives in `src/pdf_benchmark/` and is installed with
+`uv sync --frozen`. Use `uv run pdf-benchmark convert <parser>`; standalone script
+entry points were removed during the layout migration. See the [README](../README.md)
+for commands, [parser extension guide](adding-parsers.md) for adapters,
+[ground-truth guide](ground-truth.md) for editable references, and
+[layout migration](repository-layout.md) for relocated datasets and results.
+SDK pins and scoring behavior are unchanged. All seven providers produced
+byte-identical granular, filtered, and category reports from existing full-corpus
+Markdown during refactoring. Two-document PyMuPDF4LLM and both Docling CPU outputs
+also matched the earlier Markdown byte for byte.
