@@ -112,9 +112,12 @@ deduplicated artifact loading. Heavy viewers load only when needed.
 
 ## Vercel deployment
 
-Connect the GitHub repository to Vercel and set the project Root Directory to
-`apps/dashboard`, the production branch to `main`, and Node.js to 24.x.
-`vercel.json` configures Vite, `npm ci`, `npm run build`, and the `dist` output.
+The Vercel project `pdf-flow-benchmark` lives in the personal scope
+`hashiromers-projects` and connects to
+[Rvisual2/pdf-flow-benchmark](https://github.com/Rvisual2/pdf-flow-benchmark).
+Its production branch is `main`, Root Directory is `apps/dashboard`, and Node.js
+version is 24.x. `vercel.json` configures Vite, `npm ci`, `npm run build`, and the
+`dist` output.
 
 Vercel's native Git integration deploys dashboard changes on `main` to production
 and creates previews for other branches. Its **Ignored Build Step** compares
