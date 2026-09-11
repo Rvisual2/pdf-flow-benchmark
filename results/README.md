@@ -1,19 +1,22 @@
 # Benchmark results
 
-`baseline/` contains downloaded provider Markdown and historical evaluation
-reports. Restore provider files with `uv run pdf-benchmark results download`.
-Raw Markdown bytes are preserved; published metadata is curated for provenance. Each provider retains its
-`markdowns/` directory and available metadata. Docling variants are under
-`baseline/docling/ocr/` and `baseline/docling/no_ocr/`.
+All conversion outputs, downloaded releases, and generated evaluation reports live
+under `runs/`, which is ignored by Git. Use a separate directory for each experiment.
 
-`baseline/evaluation/` preserves historical CSVs and intermediate extraction JSON;
-these are archival snapshots, not automatically regenerated current scores. Both
-original filtered reports are retained under distinct names.
+```bash
+uv run pdf-benchmark convert reducto --output-dir results/runs/reducto
+uv run pdf-benchmark evaluate \
+  --markdown-source reducto=results/runs/reducto/markdowns \
+  --output-dir results/runs/evaluation
+```
 
-`runs/` is ignored by Git. New conversions and evaluation reports go here by
-default. Existing local experiments were moved here as well, including the full
-2026-09-10 run. Their logs and metadata preserve original recorded paths.
+To inspect a published run, select its release and destination explicitly:
 
-Use a distinct run directory for comparisons. Publish a run with `pdf-benchmark results upload DIRECTORY --label NAME`; promote
-its manifest pointer to the release catalog only after verification. Provider
-Markdown and metadata are ignored locally; historical evaluation CSVs stay tracked.
+```bash
+uv run pdf-benchmark results download --release all-tools-2026-09-10 \
+  --directory results/runs/published-september
+```
+
+Evaluation writes `scores.csv`, `scores_by_category.csv`, `granular.csv`,
+`filtered.csv`, and `ground_truth.json`. Reference snippets are maintained in
+`data/ground_truth/references.json`.

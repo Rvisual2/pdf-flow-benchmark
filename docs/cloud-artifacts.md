@@ -9,18 +9,15 @@ PDFs and raw Markdown are stored in the Google Cloud Storage bucket
 ```bash
 uv run pdf-benchmark data download
 uv run pdf-benchmark results releases
-uv run pdf-benchmark results download
-uv run pdf-benchmark evaluate
+uv run pdf-benchmark results download --release all-tools-2026-09-10 \
+  --directory results/runs/published-september
+uv run pdf-benchmark evaluate \
+  --markdown-source reducto=results/runs/published-september/reducto/markdowns \
+  --output-dir results/runs/evaluation
 ```
 
 Data download restores input PDFs, annotated PDFs, OCR workbook, reference JSON,
-and category mapping. Results download defaults to the archived baseline. To
-retrieve the full seven-tool September run separately:
-
-```bash
-uv run pdf-benchmark results download --release all-tools-2026-09-10 \
-  --directory results/runs/published-september
-```
+and category mapping. Select the results release and destination explicitly.
 
 Downloads require no Google account or SDK. Releases are pinned by manifest URL
 and SHA-256 in `src/pdf_benchmark/resources/artifacts.json`, which ships in the
@@ -87,12 +84,10 @@ while the bucket API does not expose an object inventory.
 
 ## Git policy
 
-PDFs, the OCR workbook, and provider baseline directories are ignored local
-caches. The release catalog, source code, reference JSON, category mapping,
-documentation, and historical evaluation reports remain reviewable in Git.
-Artifacts were removed from the index after successful publication and verified
-anonymous restoration. Older Git history still contains historical artifacts;
-this migration does not rewrite history.
+PDFs and the OCR workbook are ignored local data downloads. All conversion runs,
+downloaded parser outputs, and generated evaluation reports belong in ignored
+`results/runs/`. The release catalog, source code, reference JSON, category mapping,
+and documentation are tracked in Git.
 
 ## Dashboard thumbnails
 

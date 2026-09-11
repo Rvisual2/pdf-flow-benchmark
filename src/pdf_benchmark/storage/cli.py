@@ -5,7 +5,7 @@ import json
 from importlib.resources import files
 from pathlib import Path
 
-from ..files import BASELINE_DIRECTORY, DATA_DIRECTORY, RUNS_DIRECTORY, positive_int
+from ..files import DATA_DIRECTORY, RUNS_DIRECTORY, positive_int
 
 
 def catalog() -> dict:
@@ -38,24 +38,24 @@ def add_commands(commands, group: str) -> None:
     download = commands.add_parser(
         "download", help="Download a known release without login or bucket listing"
     )
-    download.add_argument(
-        "--manifest", help="Manifest URL or local upload receipt; defaults to the pinned release"
-    )
-    download.add_argument(
-        "--directory", type=Path, default=DATA_DIRECTORY if group == "data" else BASELINE_DIRECTORY
-    )
-    download.add_argument(
-        "--overwrite", action="store_true", help="Replace local files with different hashes"
-    )
-    download.add_argument("--workers", type=positive_int, default=8)
     if group == "results":
+        selection = download.add_mutually_exclusive_group(required=True)
+        selection.add_argument("--release", help="Published release name (see results releases)")
+        selection.add_argument("--manifest", help="Manifest URL or local upload receipt")
         download.add_argument(
-            "--release", default="baseline", help="Published release name (see results releases)"
+            "--directory", type=Path, required=True, help="Destination run directory"
         )
         releases = commands.add_parser(
             "releases", help="List published release manifests without listing the bucket"
         )
         releases.add_argument("--json", action="store_true")
+    else:
+        download.add_argument("--manifest", help="Manifest URL or local upload receipt")
+        download.add_argument("--directory", type=Path, default=DATA_DIRECTORY)
+    download.add_argument(
+        "--overwrite", action="store_true", help="Replace local files with different hashes"
+    )
+    download.add_argument("--workers", type=positive_int, default=8)
 
 
 def _run(options: argparse.Namespace) -> int:

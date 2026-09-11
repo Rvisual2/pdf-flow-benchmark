@@ -49,7 +49,7 @@ def validate_sources(sources: list[MarkdownSource]) -> None:
         occupied.update((source.name, f"{source.name}_best_match"))
         if not source.directory.is_dir():
             raise ValueError(
-                f"Markdown directory does not exist: {source.directory}. Run 'pdf-benchmark results download' for the baseline, or convert your own inputs."
+                f"Markdown directory does not exist: {source.directory}. Download a named results release or convert your own inputs."
             )
 
 

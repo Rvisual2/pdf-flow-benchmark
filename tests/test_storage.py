@@ -1,7 +1,9 @@
 """Artifact publication and anonymous retrieval must preserve data and provenance."""
 
 import base64
+import contextlib
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -10,11 +12,26 @@ from urllib.parse import unquote
 
 import httpx
 
+from pdf_benchmark.cli import build_parser
 from pdf_benchmark.storage.publication import download, publish
 from pdf_benchmark.storage.transfer import BucketPublisher, digest, json_bytes, validated_targets
 
 
 class ArtifactTransferTests(unittest.TestCase):
+    def test_result_download_requires_selection_and_destination(self):
+        parser = build_parser()
+        for flags in ([], ["--release", "example"], ["--directory", "results/runs/example"]):
+            with self.subTest(flags=flags), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    parser.parse_args(["results", "download", *flags])
+                self.assertEqual(raised.exception.code, 2)
+        for selector in ("--release", "--manifest"):
+            options = parser.parse_args(
+                ["results", "download", selector, "example", "--directory", "results/runs/example"]
+            )
+            self.assertEqual(options.directory, Path("results/runs/example"))
+            self.assertEqual(getattr(options, selector.removeprefix("--")), "example")
+
     def test_publish_and_anonymous_restore_with_provenance(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

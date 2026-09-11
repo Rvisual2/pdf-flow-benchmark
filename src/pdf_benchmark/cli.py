@@ -21,7 +21,7 @@ EXAMPLES = """Start here:
   pdf-benchmark data download
   pdf-benchmark data show
   pdf-benchmark convert docling --limit 2
-  pdf-benchmark evaluate --output-dir results/runs/evaluation
+  pdf-benchmark evaluate --markdown-source docling_ocr=results/runs/docling/ocr/markdowns
   pdf-benchmark results scores results/runs/evaluation
 
 Use '<command> --help' or 'parsers show <name>' for options and defaults.

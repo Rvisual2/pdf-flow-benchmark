@@ -147,11 +147,6 @@ def list_results(directory: Path, limit: int, as_json: bool = False) -> int:
     if not directory.is_dir():
         raise ValueError(f"Results directory does not exist: {directory}")
     files = set(directory.rglob("run.json")) | set(directory.rglob("scores.csv"))
-    files |= {
-        path
-        for path in directory.rglob("scores_by_category.csv")
-        if not (path.parent / "scores.csv").exists()
-    }
     records = []
     for path in sorted(files, key=lambda path: (path.stat().st_mtime, str(path)), reverse=True)[
         :limit
@@ -197,24 +192,13 @@ def list_results(directory: Path, limit: int, as_json: bool = False) -> int:
 
 def read_scores(path: Path) -> list[dict]:
     if path.is_dir():
-        path = next(
-            (
-                path / name
-                for name in ("scores.csv", "scores_by_category.csv")
-                if (path / name).is_file()
-            ),
-            path / "scores.csv",
-        )
+        path = path / "scores.csv"
     with path.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
     if rows and {"tool", "score_percent"}.issubset(rows[0]):
         return [{"tool": row["tool"], "score_percent": float(row["score_percent"])} for row in rows]
     weighted = next(
-        (
-            row
-            for row in rows
-            if row.get("") == "Weighted_Mean" or row.get("Folder") == "Weighted_Mean"
-        ),
+        (row for row in rows if row.get("") == "Weighted_Mean"),
         None,
     )
     if weighted is None:
@@ -222,7 +206,7 @@ def read_scores(path: Path) -> list[dict]:
     return [
         {"tool": name, "score_percent": float(value)}
         for name, value in weighted.items()
-        if name not in {"", "Folder", "Folder_Count"}
+        if name not in {"", "Folder_Count"}
     ]
 
 

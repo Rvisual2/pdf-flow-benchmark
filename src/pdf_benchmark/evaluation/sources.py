@@ -1,4 +1,4 @@
-"""Translate the historical PDF annotations and OCR workbook into reference pages."""
+"""Translate PDF annotations and the OCR workbook into reference pages."""
 
 import logging
 import re
@@ -16,7 +16,7 @@ def extract_annotations(pdf_path: Path) -> list[dict]:
     import pymupdf
 
     if pdf_path.is_dir():
-        # Preserve the historical page-to-file association for the existing dataset.
+        # Read the numbered source PDFs in order.
         paths = sorted(
             (path for path in pdf_path.iterdir() if path.suffix.lower() == ".pdf"),
             key=lambda path: int(path.stem.split("_")[-1]) if "_" in path.name else str(path),

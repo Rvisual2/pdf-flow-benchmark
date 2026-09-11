@@ -22,7 +22,7 @@ download models on first use. The
 provider API details; `uv.lock` fixes the dependency set. Commands locate this
 checkout in editable installs. When using a wheel elsewhere, set
 `PDF_BENCHMARK_ROOT` to the checkout or provide explicit input and output paths.
-The [layout migration guide](docs/repository-layout.md) maps all former paths.
+See [repository layout](docs/repository-layout.md) for the package and data directories.
 
 ## Explore the CLI
 
@@ -32,7 +32,7 @@ uv run pdf-benchmark parsers list          # Available tools and credential pres
 uv run pdf-benchmark parsers show reducto  # Defaults and every provider option
 uv run pdf-benchmark data show             # Dataset size and categories
 uv run pdf-benchmark results releases       # Published cloud releases
-uv run pdf-benchmark results download       # Restore baseline Markdown
+uv run pdf-benchmark results download --release all-tools-2026-09-10 --directory results/runs/published
 uv run pdf-benchmark data page 12          # Inspect reference snippets
 uv run pdf-benchmark results list          # Browse recent runs and evaluations
 uv run pdf-benchmark results show results/runs/reducto
@@ -110,15 +110,13 @@ Nonempty destinations require `--overwrite`, which clears old Markdown and run
 summaries. Remote submission IDs remain in `submissions.jsonl`. Failed or empty
 conversions produce a nonzero exit code; successful documents are preserved.
 
-The old standalone runners have been removed. Use `pdf-benchmark convert <parser>`
-for every provider; `python -m pdf_benchmark` is also available after installation.
-New conversions default to `results/runs/<parser>/`, leaving archived baselines
-under `results/baseline/` intact.
+Use `pdf-benchmark convert <parser>` for every provider; `python -m pdf_benchmark`
+is also available after installation. New conversions default to `results/runs/<parser>/`.
 
 ## Evaluate results
 
-Restore the archived baseline with `uv run pdf-benchmark results download`, or
-select complete runs with repeated `--markdown-source NAME=DIRECTORY` arguments:
+Select the runs to evaluate with repeated `--markdown-source NAME=DIRECTORY`
+arguments. At least one source is required:
 
 ```bash
 uv run pdf-benchmark evaluate \
@@ -135,10 +133,9 @@ The output directory contains:
 - `scores_by_category.csv`: category scores and the weighted mean.
 - `granular.csv` and `filtered.csv`: snippet distances and matched text.
 - `ground_truth.json`: versioned reference snippets with source IDs.
-- Legacy intermediate JSON exports for existing analysis scripts.
 
-By default, evaluation reads `data/ground_truth/references.json` and the downloaded
-Markdown under `results/baseline/`. To evaluate a separately reviewed reference file:
+Evaluation reads `data/ground_truth/references.json` by default and scores only
+the Markdown sources you select. To evaluate a separately reviewed reference file:
 
 ```bash
 uv run pdf-benchmark evaluate \
@@ -148,8 +145,8 @@ uv run pdf-benchmark evaluate \
 ```
 
 Use `--rebuild-ground-truth` to regenerate references from annotated PDFs and
-`ocr.xlsx`. Reports default to `results/runs/evaluation/`; individual output flags
-remain available. See [ground-truth editing](docs/ground-truth.md) for the schema
+`ocr.xlsx`. Reports default to `results/runs/evaluation/`; set `--output-dir` to choose
+another directory. See [ground-truth editing](docs/ground-truth.md) for the schema
 and provenance. Evaluation never overwrites the source references by default.
 
 ## Publish artifacts
@@ -179,16 +176,15 @@ The scorer uses fuzzy substring alignment, then normalized Levenshtein distance.
 A perfect match has distance 0. Category accuracy is `(1 - mean distance) * 100`;
 the overall score weights categories by their retained snippet counts.
 
-The historical filters remain unchanged: missing scores from any selected parser
-exclude that snippet, the `test` category is excluded, and at least one parser
+Scoring filters out snippets missing scores from any selected parser.
+The `test` category is excluded, and at least one parser
 must achieve distance below 0.25. Consequently, changing the selected parsers can
 change the evaluation sample. Compare the same providers and inspect filtered
 rows when interpreting differences.
 
 References contain known extraction and reading-order errors. Raw HTML, Markdown
-formatting, and whitespace can also affect distances. This refactor preserves
-existing scoring behavior; it does not apply the experimental ground-truth or
-HTML normalization corrections from earlier analyses.
+formatting, and whitespace can also affect distances. Inspect the source PDF and
+reference text when investigating a low score.
 
 ## Code organization and extension
 
@@ -205,11 +201,10 @@ data/
   ground_truth/             References, annotated PDFs, OCR workbook
   page_categories.csv      Page-to-category mapping
 results/
-  baseline/                Downloaded provider outputs and historical reports
   runs/                    Ignored experiments and new generated output
 apps/dashboard/            React score overview and document comparison workspace
 tests/                     Essential offline integration tests
-docs/                      Parser, dataset, and migration guides
+docs/                      Parser, dataset, and CLI guides
 ```
 
 Adapters contain SDK clients and related configuration. Shared execution and
@@ -230,5 +225,5 @@ uv run pdf-benchmark compare before/ after/ differences.txt
 The small offline suite checks paid request contracts, failure handling, async
 execution limits, native batch identity mapping, and evaluation from reference
 JSON. It makes no paid requests. For scoring changes, compare full-corpus reports
-against a baseline; for local adapter changes, compare real sample Markdown.
-Keep generated experiments under ignored `results/runs/`. Publish artifacts explicitly; generated Markdown and PDFs are no longer tracked.
+before and after a change; for local adapter changes, compare real sample Markdown.
+Keep generated experiments under ignored `results/runs/`. Publish artifacts explicitly; generated Markdown and PDFs are not tracked.

@@ -23,7 +23,6 @@ def workspace_root() -> Path:
 
 ROOT = workspace_root()
 DATA_DIRECTORY = ROOT / "data"
-BASELINE_DIRECTORY = ROOT / "results/baseline"
 RUNS_DIRECTORY = ROOT / "results/runs"
 
 

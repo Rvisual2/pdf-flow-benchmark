@@ -40,28 +40,28 @@ a page; IDs and text cannot be empty. `source` records the original source
 (`annotation` or `ocr`), including after a correction. Optional `reading_order`
 is a nonnegative integer identifying an annotation series, not an ordering
 constraint between otherwise independent snippets. List order determines the
-legacy report's `needle_index`.
+report's `needle_index`.
 
 ## Preparing and reviewing references
 
-1. Evaluate the original sources with `--rebuild-ground-truth --output-dir results/runs/reference-baseline`.
+1. Evaluate the original sources with `--markdown-source TOOL=RUN/markdowns --rebuild-ground-truth --output-dir results/runs/reference-review`.
 2. Copy its `ground_truth.json` into a separate review directory.
 3. Check suspicious snippets against the original PDF. Correct the text while
    preserving its ID and origin; record the reason in a companion review note.
 4. Evaluate the edited file with `--ground-truth-input` and a new output directory.
-5. Compare granular and summary CSVs against the baseline using identical parser
+5. Compare granular and summary CSVs before and after the edits using identical parser
    selections and filter settings. Explain reference edits separately from parser
    improvements.
 
 The original files in `data/ground_truth/annotated_pdfs/` and `ocr.xlsx` remain the
 provenance archive. The
-annotation importer preserves the historical numeric file ordering and assigns
+annotation importer uses numeric file ordering and assigns
 page numbers by position; do not rename or subset that archive when rebuilding
 existing references. For a new or partial dataset, explicit JSON page numbers
 avoid that positional convention.
 
 Annotation snippets join highlight segments by series and sequence. Workbook
 snippets undergo the existing text cleanup. JSON imports are scored as written,
-without repeating cleanup. Legacy `cleaned.json` exports remain available, but
-only the versioned format retains snippet IDs and source metadata. Importing JSON
-does not create annotation/workbook intermediate exports.
+without repeating cleanup. The `ground_truth.json` export retains snippet IDs and
+source metadata. Evaluation writes this versioned reference file and the four CSV
+reports; annotation/workbook intermediate data stays in memory.

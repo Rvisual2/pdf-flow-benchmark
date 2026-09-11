@@ -37,8 +37,7 @@ pdf-benchmark evaluate \
 parser. Paid commands require their credential. Nonempty output directories need
 `--overwrite`; prefer a fresh directory to retain earlier results.
 
-Without `--markdown-source`, evaluation selects baseline outputs restored with
-`pdf-benchmark results download`.
+Evaluation requires at least one `--markdown-source NAME=DIRECTORY`.
 Without `--ground-truth-input`, it reads the bundled dataset's reference JSON.
 Use `--rebuild-ground-truth` to re-extract source annotations and OCR text.
 `--verbose` enables per-page evaluation logs. Normal evaluation prints a summary.
@@ -47,18 +46,16 @@ Use `--rebuild-ground-truth` to re-extract source annotations and OCR text.
 
 ```bash
 pdf-benchmark results list --limit 10
-pdf-benchmark results list --directory results/baseline
 pdf-benchmark results show results/runs/smoke
 pdf-benchmark results scores results/runs/docling-evaluation
 pdf-benchmark compare results/runs/before/markdowns results/runs/after/markdowns differences.txt
 ```
 
 `results list` discovers conversion `run.json` files and evaluation score CSVs,
-ordered by file modification time. Archives without run summaries may not appear
-as individual conversion entries. `results show` displays saved configuration,
+ordered by file modification time. `results show` displays saved configuration,
 failures, duration, and output locations, or the score table for an evaluation.
-`results scores` accepts a report directory or a score CSV, including historical
-category tables containing a `Weighted_Mean` row.
+`results scores` accepts a report directory, `scores.csv`, or the current
+`scores_by_category.csv` report.
 
 ## Scripting and exit codes
 
@@ -89,8 +86,9 @@ pdf-benchmark convert reducto --output-dir results/runs/reducto \
 `data upload` publishes the dataset; `data download` restores it.
 `results upload DIRECTORY --label NAME` publishes raw Markdown with provenance.
 `results releases` lists curated release manifests without listing the bucket.
-`results download --release NAME` restores a release; `--manifest` accepts a
-manifest URL or local upload receipt. Uploads need gcloud login; downloads do not.
+`results download --release NAME --directory results/runs/NAME` restores a release.
+Use `--manifest` instead of `--release` to select a manifest URL or local upload
+receipt. An explicit destination directory is required. Uploads need gcloud login; downloads do not.
 See [cloud artifacts](cloud-artifacts.md) for publication and download details.
 
 ## Export dashboard data

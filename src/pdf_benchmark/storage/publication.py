@@ -81,8 +81,8 @@ RECORD_FIELDS = {
 
 def clean_record(record: dict) -> dict:
     cleaned = {name: value for name, value in record.items() if name in RECORD_FIELDS}
-    if record.get("file") or record.get("filename"):
-        cleaned["file"] = Path(record.get("file") or record["filename"]).name
+    if record.get("file"):
+        cleaned["file"] = Path(record["file"]).name
     if record.get("markdown_file"):
         cleaned["markdown_file"] = "markdowns/" + Path(record["markdown_file"]).name
     if "config" in record:

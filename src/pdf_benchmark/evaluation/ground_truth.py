@@ -78,15 +78,3 @@ def read_ground_truth(path: Path) -> list[ReferencePage]:
         raise ValueError(f"Malformed ground-truth document: {error}") from error
     validate_pages(pages)
     return pages
-
-
-def legacy_cleaned_data(pages: list[ReferencePage]) -> list[dict]:
-    """Keep the historical cleaned.json export available for old analyses."""
-    return [
-        {
-            "page_number": page.page_number,
-            "texts": [snippet.text for snippet in page.snippets],
-            "is_ocr": [snippet.source == "ocr" for snippet in page.snippets],
-        }
-        for page in pages
-    ]

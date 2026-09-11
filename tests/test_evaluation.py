@@ -53,6 +53,16 @@ class GroundTruthTests(unittest.TestCase):
             ]
         )
         self.assertEqual(result, 0)
+        self.assertEqual(
+            {path.name for path in output.iterdir()},
+            {
+                "scores.csv",
+                "scores_by_category.csv",
+                "granular.csv",
+                "filtered.csv",
+                "ground_truth.json",
+            },
+        )
         scores = pd.read_csv(output / "scores.csv")
         self.assertEqual(
             scores.to_dict("records"), [{"tool": "new_parser", "score_percent": 100.0}]
@@ -64,3 +74,11 @@ class GroundTruthTests(unittest.TestCase):
         self.assertEqual(
             read_ground_truth(output / "ground_truth.json"), read_ground_truth(reference)
         )
+
+    def test_evaluation_requires_explicit_markdown_sources(self):
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit) as raised:
+            main(["evaluate", "--output-dir", str(self.directory / "evaluation")])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("--markdown-source", error.getvalue())
+        self.assertFalse((self.directory / "evaluation").exists())

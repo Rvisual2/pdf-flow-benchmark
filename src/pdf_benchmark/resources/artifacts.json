@@ -11,11 +11,6 @@
       "sha256": "ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8",
       "size": 1112774,
       "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8/manifest.json"
-    },
-    "baseline": {
-      "sha256": "8562c8431653f61c09c1ac1fb50e5efa8cd83455a96a86f85a64151acddb4260",
-      "size": 916128,
-      "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/8562c8431653f61c09c1ac1fb50e5efa8cd83455a96a86f85a64151acddb4260/manifest.json"
     }
   },
   "schema_version": 1,

@@ -1,6 +1,6 @@
 # Converter upgrade audit — 2026-09-10
 
-The pre-upgrade repository baseline was dated 2026-04-23. SDK versions below were checked against PyPI and current official documentation. Pins record the reviewed release; a newer release should be reviewed before changing them. Provider accuracy claims have not been measured on this corpus.
+The pre-upgrade repository was dated 2026-04-23. SDK versions below were checked against PyPI and current official documentation. Pins record the reviewed release; a newer release should be reviewed before changing them. Provider accuracy claims have not been measured on this corpus.
 
 | Tool | Updated integration | Bulk processing |
 | --- | --- | --- |
@@ -13,9 +13,9 @@ The pre-upgrade repository baseline was dated 2026-04-23. SDK versions below wer
 
 ## Compatibility and reproducibility
 
-The legacy `llama-cloud-services` packages constrain `llama-cloud` to 0.1.x. The migration replaces `llama-cloud-services` and `llama-parse` with the current SDK. The new dependency set resolves in `uv.lock`.
+LlamaParse uses the current `llama-cloud` SDK. The dependency set resolves in `uv.lock`.
 
-PyMuPDF4LLM is included as one benchmark provider, using the current bundled Layout default. `--no-layout` disables Layout explicitly and uses native sequential execution to preserve this setting across platforms: the current batch pool does not propagate it to spawned workers. The `pymupdf4llm` score column reads the `results/baseline/pymupdf4llm/markdowns` directory by default. PyMuPDF 1.28.2 also remains an internal dependency for reading ground-truth annotations. The Docling GPU runner is removed.
+PyMuPDF4LLM is included as one benchmark provider, using the current bundled Layout default. `--no-layout` disables Layout explicitly and uses native sequential execution to preserve this setting across platforms: the current batch pool does not propagate it to spawned workers. Select the PyMuPDF4LLM run with `--markdown-source pymupdf4llm=RUN/markdowns`. PyMuPDF 1.28.2 also remains an internal dependency for reading ground-truth annotations. The Docling GPU runner is removed.
 
 LlamaParse resolves the service's `latest` version **for the selected tier** once before submission, validates it against published versions, and records the dated version. `--parser-version` can select a published date explicitly. Native directory batches create a saved configuration using those same settings; remote configuration, directory, file, and batch IDs are written to `submissions.jsonl`.
 
@@ -27,7 +27,7 @@ Both Docling OCR modes remain available on CPU, with separate output folders; th
 
 Standard concurrent execution is the default for hosted document parsers. Reducto's documented immediate batch workflow submits individual requests concurrently; there is no documented multi-document immediate parse endpoint. The runner uses `/parse_async` with `queue_priority="standard"`, polls job status, and saves each completed result. Delayed discount queues are excluded per the real-time requirement. LlamaParse's native directory batch API is distinct from discounted queue processing.
 
-Runs refuse nonempty output folders unless `--overwrite` is supplied. Overwriting clears old Markdown so stale successes cannot contaminate a partial or failed rerun. Preserve baseline results by using new output folders. LlamaParse and Reducto job IDs are saved before polling; an interrupted local process does not cancel the hosted job. There is no automatic resume/resubmit workflow.
+Runs refuse nonempty output folders unless `--overwrite` is supplied. Overwriting clears old Markdown so stale successes cannot contaminate a partial or failed rerun. Use a new output folder for each experiment. LlamaParse and Reducto job IDs are saved before polling; an interrupted local process does not cancel the hosted job. There is no automatic resume/resubmit workflow.
 
 ## Sources
 
@@ -52,11 +52,10 @@ Runs refuse nonempty output folders unless `--overwrite` is supplied. Overwritin
 ## Refactored entry points
 
 The current implementation lives in `src/pdf_benchmark/` and is installed with
-`uv sync --frozen`. Use `uv run pdf-benchmark convert <parser>`; standalone script
-entry points were removed during the layout migration. See the [README](../README.md)
+`uv sync --frozen`. Use `uv run pdf-benchmark convert <parser>`. See the [README](../README.md)
 for commands, [parser extension guide](adding-parsers.md) for adapters,
 [ground-truth guide](ground-truth.md) for editable references, and
-[layout migration](repository-layout.md) for relocated datasets and results.
+[repository layout](repository-layout.md) for data and result directories.
 SDK pins and scoring behavior are unchanged. All seven providers produced
 byte-identical granular, filtered, and category reports from existing full-corpus
 Markdown during refactoring. Two-document PyMuPDF4LLM and both Docling CPU outputs
