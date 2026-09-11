@@ -31,3 +31,6 @@ agents.md
 /data/pdfs/
 /data/ground_truth/annotated_pdfs/
 /data/ground_truth/ocr.xlsx
+
+# Local Vercel project links and pulled configuration
+.vercel/

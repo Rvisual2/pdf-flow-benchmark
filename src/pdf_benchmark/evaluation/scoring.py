@@ -90,15 +90,13 @@ def analyze_results(
     page_mapping: pd.DataFrame,
     score_columns: list[str],
     threshold: float = 0.25,
-    excluded_folders: tuple[str, ...] = ("test",),
 ) -> EvaluationReports:
     if not {"Page", "Folder"}.issubset(page_mapping.columns):
         raise ValueError("Page mapping requires Page and Folder columns")
     if page_mapping.Page.duplicated().any():
         raise ValueError("Page mapping contains duplicate pages")
     merged = raw_scores.merge(page_mapping, left_on="page_number", right_on="Page")
-    complete = merged.dropna(subset=score_columns).copy()
-    granular = complete[~complete["Folder"].isin(excluded_folders)]
+    granular = merged.dropna(subset=score_columns).copy()
     filtered = granular[granular[score_columns].min(axis=1) < threshold]
     if filtered.empty:
         return EvaluationReports(granular, filtered, pd.DataFrame())

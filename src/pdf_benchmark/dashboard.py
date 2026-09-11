@@ -28,7 +28,6 @@ CATEGORY_NAMES = {
     "manuals_sample": "Manuals",
     "patents": "Patents",
     "science_sample": "Science",
-    "test": "Test set",
 }
 
 
@@ -149,7 +148,7 @@ def export_dashboard(evaluation: Path, run: Path, release: str, client: httpx.Cl
         "categories": CATEGORY_NAMES,
         "scoredDocuments": int(filtered.page_number.nunique()),
         "scoredSnippets": len(filtered),
-        "methodology": "FATA measures character similarity within coherent reading-flow snippets. Scores use the same retained snippets for every parser; test pages and rows missing any parser are excluded. A snippet is retained when at least one parser has distance below 0.25. Rendered HTML is a viewing aid; the evaluator scores original Markdown. Ground truth contains known extraction errors.",
+        "methodology": "FATA measures character similarity within coherent reading-flow snippets. Scores use the same retained snippets for every parser; rows missing any parser are excluded. A snippet is retained when at least one parser has distance below 0.25. Rendered HTML is a viewing aid; the evaluator scores original Markdown. Ground truth contains known extraction errors.",
     }
 
 

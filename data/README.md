@@ -1,5 +1,7 @@
 # Benchmark dataset
 
+The dataset contains 127 single-page PDFs, identified by `page_1` through `page_127`.
+
 - `pdfs/`: unannotated conversion inputs, identified by `page_<number>.pdf`.
 - `ground_truth/references.json`: versioned snippets used by default evaluation.
 - `ground_truth/annotated_pdfs/`: source highlight annotations.

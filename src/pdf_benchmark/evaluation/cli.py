@@ -67,9 +67,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.25,
         help="Retain snippets where at least one distance is below this value",
     )
-    parser.add_argument(
-        "--excluded-folders", nargs="+", default=["test"], help="Categories to exclude"
-    )
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -109,7 +106,6 @@ def main(arguments: list[str] | None = None) -> int:
             pd.read_csv(options.page_mapping),
             [source.name for source in sources],
             options.min_score_threshold,
-            tuple(options.excluded_folders),
         )
         reports.granular.to_csv(options.output_dir / "granular.csv", index=False)
         reports.filtered.to_csv(options.output_dir / "filtered.csv", index=False)

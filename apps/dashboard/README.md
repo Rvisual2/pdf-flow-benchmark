@@ -86,7 +86,7 @@ and `HEAD`. This does not grant listing or writing permissions.
 
 The document list uses lazy-loaded color JPEG covers from the separate
 `pdf-flow-thumbnails-hashiromer-20260910` bucket. Each image is capped at 320 pixels
-on its longest edge, with JPEG quality 70. All 129 current PDFs have one page;
+on its longest edge, with JPEG quality 70. All 127 current PDFs have one page;
 future multi-page inputs use the first page as their cover.
 
 ```bash
@@ -108,5 +108,21 @@ controls and ranking logic; `DocumentExplorer.tsx` renders the inspection queue;
 handles PDF.js lifecycle. `data.ts` defines the snapshot contract and verified,
 deduplicated artifact loading. Heavy viewers load only when needed.
 
+## Vercel deployment
+
+Connect the GitHub repository to Vercel and set the project Root Directory to
+`apps/dashboard`, the production branch to `main`, and Node.js to 24.x.
+`vercel.json` configures Vite, `npm ci`, `npm run build`, and the `dist` output.
+
+Vercel's native Git integration deploys dashboard changes on `main` to production
+and creates previews for other branches. Its **Ignored Build Step** compares
+`apps/dashboard/` with the last deployed commit on that branch. Changes elsewhere
+in the repository skip the build. A first deployment always builds; comparing
+against the last deployment also catches dashboard edits earlier in a multi-commit
+push. No GitHub Actions workflow or Vercel token in GitHub secrets is needed.
+
+Changes to `public/data-source.json` count as dashboard changes, so publishing a
+new evaluation and pushing its updated pointer refreshes the deployed results.
+Python code, dataset files, and root documentation alone do not trigger a build.
+
 Deploy `dist/` to any static host. Keep its `data-source.json` and `pdfjs/` assets.
-The included `.openai/hosting.json` also supports Sites hosting.

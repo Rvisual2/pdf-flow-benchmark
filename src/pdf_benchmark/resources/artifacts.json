@@ -1,23 +1,23 @@
 {
   "bucket": "pdf-flow-benchmark-hashiromer-20260910",
   "dataset": {
-    "sha256": "d381e079bd6705714cdc558e87675ffb90939e43c6f3b071d8231a7551cc4252",
-    "size": 87613,
-    "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/d381e079bd6705714cdc558e87675ffb90939e43c6f3b071d8231a7551cc4252/manifest.json"
+    "sha256": "52831960d5aa399922e34506b652e2982f08b7e2689dad7dab5165627013f49c",
+    "size": 86269,
+    "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/52831960d5aa399922e34506b652e2982f08b7e2689dad7dab5165627013f49c/manifest.json"
   },
   "project": "pypi-download-analysis-457820",
   "releases": {
     "all-tools-2026-09-10": {
-      "sha256": "ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8",
-      "size": 1112774,
-      "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/ec4179f4f07ebf28e63badc92bdc551e6898d9b6fe6f7cfc4c57e2d10f9fb0a8/manifest.json"
+      "sha256": "366cf6dac30b0f9880b3f65c33db9d9089e1924021a74933b0dbd991b4b6b15f",
+      "size": 1095895,
+      "url": "https://storage.googleapis.com/pdf-flow-benchmark-hashiromer-20260910/objects/366cf6dac30b0f9880b3f65c33db9d9089e1924021a74933b0dbd991b4b6b15f/manifest.json"
     }
   },
   "schema_version": 1,
   "thumbnail_bucket": "pdf-flow-thumbnails-hashiromer-20260910",
   "thumbnails": {
-    "sha256": "b180f4c190c44dbe9c30e33ed0a9862b603eeda76530310234888ee6947e2ecb",
-    "size": 68933,
-    "url": "https://storage.googleapis.com/pdf-flow-thumbnails-hashiromer-20260910/objects/b180f4c190c44dbe9c30e33ed0a9862b603eeda76530310234888ee6947e2ecb/thumbnails.json"
+    "sha256": "9b66bd6cddbb4610951573c1e66009aff1a4431d0b0a7db127df076dd8e57c3f",
+    "size": 67867,
+    "url": "https://storage.googleapis.com/pdf-flow-thumbnails-hashiromer-20260910/objects/9b66bd6cddbb4610951573c1e66009aff1a4431d0b0a7db127df076dd8e57c3f/thumbnails.json"
   }
 }

@@ -1,55 +1,126 @@
 # Flow-Aware PDF-to-Markdown Benchmark
 
-Compare PDF extraction tools by how well their Markdown preserves coherent reading
-flow. Flow-Aware Text Accuracy (FATA) matches reference snippets against each
-parser's output and reports character-level similarity as a percentage.
+A PDF extractor can recover every word on a page and still produce text that is
+hard to read. Interleave two columns, insert a sidebar halfway through a sentence,
+or separate the beginning of a paragraph from its continuation, and the passage
+loses its meaning. For RAG and other workflows that consume extracted text,
+keeping those passages intact matters.
 
-## Setup
+This benchmark asks: **does the tool preserve each passage as coherent, correctly
+ordered text in its Markdown output?** Flow-Aware Text Accuracy (FATA) scores
+reference passages against extracted Markdown. The dashboard lets you follow a
+score down to the text difference and the original PDF, so you can see what went
+wrong—and check whether the reference itself needs correcting.
 
-Use Python 3.13 or newer. From the repository root:
+## Latest leaderboard
 
-```bash
-uv sync --frozen
-uv run pdf-benchmark --help
-uv run pdf-benchmark data download
+Latest published run: **2026-09-10** (`all-tools-2026-09-10`). Overall FATA on
+445 retained snippets across 121 pages; higher is better.
+
+| Tool | Total FATA (%) |
+| --- | ---: |
+| Gemini 3.8 Flash (OpenRouter) | 92.15 |
+| Datalab Accurate | 88.23 |
+| Docling CPU with OCR | 86.66 |
+| Reducto r-1 | 86.56 |
+| LlamaParse Agentic | 86.55 |
+| Docling CPU without OCR | 85.68 |
+| PyMuPDF4LLM | 84.69 |
+
+These are the same totals shown in the [dashboard](apps/dashboard/README.md).
+The scoring and sample-selection rules below explain how to interpret them.
+
+## What “flow-aware” means
+
+A complex page can have several valid reading paths. Two independent articles
+can appear in either order in the output; the sentences *within* each article
+still need to stay together.
+
+Consider a page with two independent columns:
+
+| Left column | Right column |
+| --- | --- |
+| The pump stopped. | The sensor failed. |
+| Replace the seal. | Check the cable. |
+
+Both of these preserve the passages:
+
+```text
+The pump stopped. Replace the seal.
+The sensor failed. Check the cable.
 ```
 
-`uv sync` installs the project in editable mode and exposes `pdf-benchmark`.
-Build a distributable wheel with `uv build`; the wheel contains code and the LLM
-prompt, while datasets and results remain in the checkout. Local converters
-download models on first use. The
-[converter audit](docs/converter-upgrade.md) records reviewed SDK versions and
-provider API details; `uv.lock` fixes the dependency set. Commands locate this
-checkout in editable installs. When using a wheel elsewhere, set
-`PDF_BENCHMARK_ROOT` to the checkout or provide explicit input and output paths.
-See [repository layout](docs/repository-layout.md) for the package and data directories.
-
-## Explore the CLI
-
-```bash
-uv run pdf-benchmark                       # Show command groups and examples
-uv run pdf-benchmark parsers list          # Available tools and credential presence
-uv run pdf-benchmark parsers show reducto  # Defaults and every provider option
-uv run pdf-benchmark data show             # Dataset size and categories
-uv run pdf-benchmark results releases       # Published cloud releases
-uv run pdf-benchmark results download --release all-tools-2026-09-10 --directory results/runs/published
-uv run pdf-benchmark data page 12          # Inspect reference snippets
-uv run pdf-benchmark results list          # Browse recent runs and evaluations
-uv run pdf-benchmark results show results/runs/reducto
-uv run pdf-benchmark results scores results/runs/evaluation
+```text
+The sensor failed. Check the cable.
+The pump stopped. Replace the seal.
 ```
 
-Every group supports `--help`; inspection commands accept `--json` for scripts.
-Discovery makes no paid requests. See [CLI usage](docs/cli.md) for workflows.
+Reading across the rows breaks them:
 
-## Browse the dashboard
+```text
+The pump stopped. The sensor failed. Replace the seal. Check the cable.
+```
 
-The [React dashboard](apps/dashboard/README.md) compares all seven parser pipelines
-across 129 PDFs. Filter the document score matrix by tool, category, low/high scores,
-or tool disagreements. Open a score to compare ground-truth snippets with the
-evaluator's closest matches. The PDF + Markdown tab shows the original PDF beside
-rendered or raw tool output, and the tool comparison view diffs complete outputs.
-Document previews, reference matches, and artifact provenance connect scores to evidence.
+FATA matches each reference passage independently within the output. It therefore
+allows independent passages to move while penalizing text errors and disruptions
+inside a passage. The focus is **prose extraction and reading flow**. Table
+structure, figure understanding, visual layout fidelity, and downstream RAG
+quality need their own evaluations.
+
+## What is measured
+
+The current collection contains **127 single-page PDFs**. It includes DocLayNet
+samples from financial reports, scientific articles, laws, government tenders,
+manuals, and patents, plus OCR examples. Numbered highlights in annotated PDFs
+identify passage segments in reading order; an OCR workbook supplies additional
+references. The evaluator reads these as versioned JSON snippets with source IDs.
+
+For every reference snippet and selected tool:
+
+1. Find a candidate matching substring in that page's Markdown using RapidFuzz's
+   `partial_ratio_alignment`.
+2. Compute the character-level Levenshtein edit distance between the reference
+   and that substring, normalized by the longer string's length.
+3. Aggregate the retained snippet distances into category and overall accuracy.
+
+```text
+distance = edit_distance(reference, match) / max(len(reference), len(match))
+FATA (%) = 100 × (1 − mean retained snippet distance)
+```
+
+A perfect match scores 100%. Each retained snippet has equal weight; the overall
+score weights category means by their snippet counts, not by passage length.
+Matching uses fuzzy alignment rather than an exhaustive search for the substring
+with the lowest Levenshtein distance. Markdown syntax, HTML, and whitespace are
+scored as written.
+
+### Interpreting a score
+
+By default, a snippet contributes to the final score only when every selected tool
+has a score and at least one tool has a normalized distance **below 0.25**. This means missing or empty outputs and passages that all
+tools struggle with can disappear from the summary. Changing the tool selection
+can also change the scored sample. Compare the same tools, references, and filter
+settings, and inspect conversion failures alongside the score.
+
+The references contain known extraction and reading-order errors. A low score is
+a starting point for investigation; use the PDF to distinguish a parser failure
+from a reference problem. A high score means the retained reference passages were
+preserved well. It does not establish that every part of the page was extracted
+correctly, or penalize all extra text outside the matched passages.
+
+## Start with the dashboard
+
+The [React dashboard](apps/dashboard/README.md) opens the published comparison of
+seven parser pipelines without running conversions. Use it to:
+
+- Find a tool's weakest or strongest documents, filter by category, or find pages
+  where any or every tool falls within a score range.
+- Sort by tool disagreement to investigate where parsers behave differently.
+- Diff a ground-truth snippet against the evaluator's exact selected match.
+- Inspect the original **PDF + Markdown** side by side, switch tools, or diff two
+  complete tool outputs. Share the current selection through its URL.
+
+With Node.js 22.12+ (or 24+) and npm, run from the repository root:
 
 ```bash
 cd apps/dashboard
@@ -57,12 +128,52 @@ npm ci
 npm run dev
 ```
 
-The dashboard reads published artifacts anonymously; no Python environment or API
-keys are needed to view it. Build a static deployment with `npm run build`.
-Refresh its data from evaluated, published runs with `pdf-benchmark dashboard export`;
-see the dashboard guide for the complete workflow.
+Open the URL printed by Vite. The dashboard reads published artifacts anonymously;
+no Python environment or provider API keys are needed. `npm run build` creates a
+static build. To display your own evaluated runs, follow the dashboard guide's
+[publish and export workflow](apps/dashboard/README.md#refresh-the-published-snapshot).
 
-## Generate Markdown
+## Set up the benchmark
+
+Use Python 3.13 or newer and `uv`. Run these commands from the repository root:
+
+```bash
+uv sync --frozen
+uv run pdf-benchmark data download
+uv run pdf-benchmark parsers list
+```
+
+This installs the package and CLI, restores the input PDFs and reference sources,
+and lists the available tools and credential presence. Downloads and inspection
+commands require no provider keys. Local converters download models on first use;
+`uv.lock` pins the dependency set.
+
+### Run a local smoke check
+
+Generate Markdown for two PDFs with PyMuPDF4LLM, then score it:
+
+```bash
+uv run pdf-benchmark convert pymupdf4llm \
+  --limit 2 --output-dir results/runs/smoke
+uv run pdf-benchmark evaluate \
+  --markdown-source pymupdf4llm=results/runs/smoke/markdowns \
+  --output-dir results/runs/smoke-evaluation
+uv run pdf-benchmark results scores results/runs/smoke-evaluation
+```
+
+This uses no paid API. It checks the conversion-to-report workflow on a small
+sample; remove `--limit 2` and choose a fresh output directory for a full run.
+The filtering rules above still apply to a single-tool evaluation.
+
+To inspect an existing published run without invoking a parser:
+
+```bash
+uv run pdf-benchmark results releases
+uv run pdf-benchmark results download --release all-tools-2026-09-10 \
+  --directory results/runs/published
+```
+
+## Run and compare tools
 
 Every parser uses the same command structure:
 
@@ -131,7 +242,9 @@ The output directory contains:
 
 - `scores.csv`: a simple `tool,score_percent` table.
 - `scores_by_category.csv`: category scores and the weighted mean.
-- `granular.csv` and `filtered.csv`: snippet distances and matched text.
+- `granular.csv`: snippet distances and matched text after excluding missing scores,
+  before the distance threshold.
+- `filtered.csv`: the retained snippets used in the final score.
 - `ground_truth.json`: versioned reference snippets with source IDs.
 
 Evaluation reads `data/ground_truth/references.json` by default and scores only
@@ -164,28 +277,6 @@ uv run pdf-benchmark results download --release all-tools-2026-09-10 \
 See [cloud artifacts](docs/cloud-artifacts.md) for manifests, integrity checks,
 provenance, and access permissions. Public users cannot list or write objects.
 
-## How scoring works
-
-The source collection includes documents sampled from DocLayNet across financial
-reports, scientific articles, laws, tenders, manuals, and patents. Numbered PDF
-highlights form reference snippets in reading order; the workbook supplies
-additional OCR references. Each snippet represents a coherent passage, without
-requiring unrelated passages on a page to have a single total order.
-
-The scorer uses fuzzy substring alignment, then normalized Levenshtein distance.
-A perfect match has distance 0. Category accuracy is `(1 - mean distance) * 100`;
-the overall score weights categories by their retained snippet counts.
-
-Scoring filters out snippets missing scores from any selected parser.
-The `test` category is excluded, and at least one parser
-must achieve distance below 0.25. Consequently, changing the selected parsers can
-change the evaluation sample. Compare the same providers and inspect filtered
-rows when interpreting differences.
-
-References contain known extraction and reading-order errors. Raw HTML, Markdown
-formatting, and whitespace can also affect distances. Inspect the source PDF and
-reference text when investigating a low score.
-
 ## Code organization and extension
 
 ```text
@@ -213,7 +304,26 @@ out of individual providers. Plain functions handle matching and reporting.
 Follow [Adding a parser](docs/adding-parsers.md) to register a new adapter without
 changing the scorer.
 
-## Development
+## CLI and development
+
+Every command group supports `--help`; inspection commands accept `--json` for
+scripts. Explore a provider's settings, a reference page, or a saved run:
+
+```bash
+uv run pdf-benchmark parsers show reducto
+uv run pdf-benchmark data page 12
+uv run pdf-benchmark results list
+uv run pdf-benchmark results show results/runs/reducto
+```
+
+See [CLI usage](docs/cli.md) for workflows and the
+[converter audit](docs/converter-upgrade.md) for reviewed SDK versions and provider
+details. `uv sync` installs the project in editable mode. `uv build` creates a
+wheel containing code and bundled resources; datasets and runs stay outside the
+wheel. When using a wheel elsewhere, set `PDF_BENCHMARK_ROOT` to the checkout or
+provide explicit input and output paths.
+
+Run the offline checks from the repository root:
 
 ```bash
 uv run python -m unittest discover -s tests -v
