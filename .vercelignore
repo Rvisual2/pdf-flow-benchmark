@@ -1,5 +1,4 @@
-# CLI deployments only need the dashboard. Git builds use the project root setting.
-/.git/
+# Keep dashboard sources and Git metadata needed by the Ignored Build Step.
 /.vercel/
 /.venv/
 /.env*
