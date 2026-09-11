@@ -110,7 +110,9 @@ correctly, or penalize all extra text outside the matched passages.
 
 ## Start with the dashboard
 
-[Open the live dashboard](https://pdf-flow-benchmark.vercel.app).
+[Open the live dashboard](https://pdf-flow-benchmark.vercel.app). Vercel deploys
+changes under `apps/dashboard/` from `main`; changes to benchmark code, data, or
+root documentation skip the dashboard build.
 
 The [React dashboard](apps/dashboard/README.md) opens the published comparison of
 seven parser pipelines without running conversions. Use it to:
